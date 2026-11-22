@@ -1,0 +1,550 @@
+<!doctype html>
+<html lang="kr" app-version="1.0.0" last-updated="2026-11-21">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&display=swap" rel="stylesheet">
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script type="text/javascript">
+    $(document).ready(() => {
+      var sourceText = $("#sourceText");
+      var applyButton = $("#applyButton");
+      var copyButton = $("#copyButton");
+      var collapseButton = $("#collapseButton");
+      var threeNewLineCheckbox = $('#threeNewLines');
+      var fourNewLinesCheckbox = $('#fourNewLines');
+      var collapsed = false;
+      var resetButton = function () {
+        copyButton.html("복사하기");
+      };
+      var formatText = function (text) {
+        /* Options */
+        var newParagraph = $('#forPublisher').is(':checked') ? "\n" : "\n\n";
+        var consecutiveDialogue = $('#consecutiveDialogue').is(':checked') ? '\n' : newParagraph;
+        var joinDiary = $('#joinDiary').is(':checked') ? "\n" : newParagraph;
+        var joinGomoku = $('#joinGomoku').is(':checked') ? "\n" : newParagraph;
+        var threeNewLines = threeNewLineCheckbox.is(':checked') ? "\n###br###\n" : '\n\n';
+        var fourNewLines = fourNewLinesCheckbox.is(':checked') ? "\n###br###\n" : '\n\n';
+        var conLineRegEx = threeNewLineCheckbox.is(':checked') ? RegExp(/\n{4,}/g) : RegExp(/\n{5,}/g);
+
+        /* Default format */
+        var prettified = text
+          .trim()
+          .replace(/[^\S\r\n]+,/g, ",") // Remove spaces before comma
+          .replace(/["“”]/g, '"') // Replace double qutoes
+          .replace(/['‘’]/g, "'") // Replace single quotes
+          .replace(/\n[^\S\r\n]+?-[^\S\r\n]+?/g, '\n- ') // Replace spaces after list (-)
+          .replace(/\n[^\S\r\n]+/g, '\n'); // Remove spaces in empty lines
+        if (threeNewLineCheckbox.is(':checked')) {
+          // Find 3+ consecutive new lines
+          prettified = prettified.replace(/\n{4,}/g, "\n###br###\n");
+        } else if (fourNewLines = fourNewLinesCheckbox.is(':checked')) {
+          // Find 4+ consecutive new lines
+          prettified = prettified.replace(/\n{5,}/g, "\n###br###\n");
+        }
+        prettified = prettified
+          .replace(/\n+/g, '\n') // Ignore spaces between new lines
+          .split(/\n/g);
+        console.log(`fourNewLines:\n${prettified}`);
+        var diaryTest = /(^[0-9]?[0-9]\/[0-9]?[0-9]$|^.+(\s+)?\:|^-|^([A-Za-z]|[0-9]+)\.)/;
+        var dialogues = [];
+        var diary = [];
+        var gomoku = [];
+        var returnText = '';
+
+        /* Format line by line */
+        for (let i = 0; i < prettified.length; i++) {
+          const lastLine = prettified.length == i + 1;
+          let line = prettified[i];
+          let returnLine = '';
+          let skipLine = false;
+          let switchLineType = false;
+          let printDialogues = false;
+          let printDiary = false;
+          let printGomoku = false;
+
+          if (line.startsWith('"') && line.endsWith('"')) {
+            dialogues.push(line);
+            printDiary = diary.length > 0;
+            printGomoku = gomoku.length > 0;
+            switchLineType = printDiary || printGomoku;
+            skipLine = true;
+          } else if (diaryTest.test(line)) {
+            diary.push(line);
+            printDialogues = dialogues.length > 0;
+            printGomoku = gomoku.length > 0;
+            switchLineType = printDialogues || printGomoku;
+            skipLine = true;
+          } else if (['┌', '├', '└', '●', '○'].includes(line[0])) {
+            gomoku.push(line);
+            printDialogues = dialogues.length > 0;
+            printDiary = diary.length > 0;
+            switchLineType = printDialogues || printDiary;
+            skipLine = true;
+          }
+          if (!skipLine || switchLineType || lastLine) {
+            if (dialogues?.length > 0 && (!switchLineType || printDialogues)) {
+              returnLine = dialogues.join(consecutiveDialogue);
+              dialogues = [];
+            }
+            if (diary?.length > 0 && (!switchLineType || printDiary)) {
+              returnLine = diary.join(joinDiary);
+              diary = [];
+            }
+            if (gomoku?.length > 0 && (!switchLineType || printGomoku)) {
+              returnLine = gomoku.join(joinGomoku);
+              gomoku = [];
+            }
+            if (line === '###br###') {
+              line = '';
+            }
+            if (!skipLine) {
+              if (returnLine == '') {
+                returnLine = line;
+              } else {
+                returnLine += newParagraph + line;
+              }
+            }
+            if (returnText == '') {
+              returnText = returnLine;
+            } else {
+              returnText += newParagraph + returnLine;
+            }
+          }
+        }
+        return returnText;
+      };
+      $(document).on("click", function (event) {
+        if (event.target.id !== "sourceText" && event.target.id !== "collapseButton") {
+          sourceText.focus();
+        }
+      });
+      sourceText.on("paste", function (event) {
+        var scrollY = this.scrollTop;
+        setTimeout(() => {
+          sourceText.scrollTop(scrollY);
+        }, 0);
+        // event.preventDefault();
+        // resetButton();
+        // var clipboardData = (event.originalEvent || event).clipboardData;
+        // var text = clipboardData.getData("text/plain");
+        // this.value = formatText(text);
+      });
+      applyButton.on("click", function () {
+        // var sourceText = $("#sourceText");
+        var scrollHeight = sourceText.prop('scrollHeight');
+        var scrollY = sourceText.scrollTop();
+        sourceText.val(formatText(sourceText.val()));
+        setTimeout(() => {
+          var scrollHeightNew = sourceText.prop('scrollHeight');
+          sourceText.scrollTop(scrollY / scrollHeight * scrollHeightNew);
+        }, 0);
+      });
+      copyButton.on("click", function () {
+        var scrollY = sourceText.scrollTop();
+        navigator.clipboard
+          .writeText(sourceText.val())
+          .then(() => {
+            sourceText.scrollTop(scrollY);
+            copyButton.html("복사 완료!");
+            setTimeout(resetButton, 2000);
+          })
+          .catch((err) => {
+            console.error("Failed to copy text: ", err);
+          });
+      });
+      collapseButton.on("click", function () {
+        if (collapsed) {
+          $("#box-left").addClass("hidden");
+          $('#box-right').addClass("expanded");
+          $("#control").addClass("collapsed");
+          collapseButton.html("&gt;");
+          collapsed = false;
+        } else {
+          $("#box-left").removeClass("hidden");
+          $("#control").removeClass("collapsed");
+          $('#box-right').removeClass("expanded");
+          collapseButton.html("&lt;");
+          collapsed = true;
+        }
+      });
+      threeNewLineCheckbox.on("click", function() {
+        var threeNewLines = $('#threeNewLines').is(':checked');
+        var fourNewLines = $('#fourNewLines').is(':checked');
+        if (threeNewLines && fourNewLines) {
+          fourNewLinesCheckbox.prop('checked', false);
+        }
+      });
+      fourNewLinesCheckbox.on("click", function() {
+        var threeNewLines = $('#threeNewLines').is(':checked');
+        var fourNewLines = $('#fourNewLines').is(':checked');
+        if (threeNewLines && fourNewLines) {
+          threeNewLineCheckbox.prop('checked', false);
+        }
+      });
+      // Update version information
+      $('#version span').html(`v${$('html').attr('app-version')} (${$('html').attr('last-updated')})`);
+    });
+  </script>
+  <!-- <link rel="stylesheet" href="style.css" /> -->
+  <title>~개행 다듬기~</title>
+</head>
+
+<body>
+  <div id="container">
+    <div id="box-left">
+      <h1>차곡차곡</h1>
+      <div id="version">
+        <span>v1.0.0 2025-11-21</span>
+      </div>
+      <div id="options">
+        <div class="checkbox-wrapper">
+          <label class="switch">
+            <input type="checkbox" id="consecutiveDialogue" checked/>
+            <span class="slider"></span>
+          </label>
+          <label for="consecutiveDialogue" class="checkbox-texts"><abbr title="쌍따옴표로 시작하고 끝나는 줄">대사</abbr>끼리 붙이기</label>
+        </div>
+        <div class="checkbox-wrapper">
+          <label class="switch">
+            <input type="checkbox" id="joinDiary" checked />
+            <span class="slider"></span>
+          </label>
+          <label for="joinDiary" class="checkbox-texts"><abbr
+              title="날짜(12/24)로만 되어있거나, 특수문자 '-'로 시작하거나, 혹은 콜롬(':')을 포함한 줄">목록</abbr>끼리 붙이기</label>
+        </div>
+        <div class="checkbox-wrapper">
+          <label class="switch">
+            <input type="checkbox" id="joinGomoku" checked />
+            <span class="slider"></span>
+          </label>
+          <label for="joinGomoku" class="checkbox-texts">
+            <abbr title="특수문자 '┌',  '├', '└', '●', '○'로 시작하는 줄">오목판</abbr> 붙이기</label>
+        </div>
+        <div class="checkbox-wrapper">
+          <label class="switch">
+            <input type="checkbox" id="fourNewLines" checked />
+            <span class="slider"></span>
+          </label>
+          <label for="fourNewLines" class="checkbox-texts">네번 엔터는 유지</label>
+        </div>
+        <div class="checkbox-wrapper">
+          <label class="switch">
+            <input type="checkbox" id="threeNewLines" />
+            <span class="slider"></span>
+          </label>
+          <label for="threeNewLines" class="checkbox-texts">세번 엔터</abbr>는 유지</label>
+        </div>
+        <div class="checkbox-wrapper">
+          <label class="switch">
+            <input type="checkbox" id="forPublisher" />
+            <span class="slider"></span>
+          </label>
+          <label for="forPublisher" class="checkbox-texts">출판용(엔터 없음)</label>
+        </div>
+        <!-- <div class="checkbox-wrapper">
+          <label class="switch">
+            <input type="checkbox" id="autoFormatCheckbox" />
+            <span class="slider"></span>
+          </label>
+          <label for="autoFormatCheckbox" class="checkbox-texts">자동 포맷ting</label>
+        </div> -->
+        <div class="button-wrapper">
+          <button id="applyButton" class="button-74" role="button">
+            다듬기
+          </button>
+        </div>
+        <div class="button-wrapper">
+          <button id="copyButton" class="button-74" role="button">
+            복사하기
+          </button>
+        </div>
+      </div>
+    </div>
+    <div id="box-right">
+      <textarea id="sourceText"></textarea>
+    </div>
+    <div id="control">
+      <div class="button-wrapper">
+        <button id="collapseButton" role="button">
+          &lt;
+        </button>
+      </div>
+    </div>
+  </div>
+</body>
+<style>
+  * {
+  box-sizing: border-box;
+}
+body {
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
+}
+label {
+  font-size: 0.8em;
+  line-height: 100%;
+}
+#container {
+  width: 100%;
+  height: 100vh;
+  display: flex;
+  flex-direction: row;
+  display: flex;
+}
+#box-left {
+  width: 300px;
+  height: 100%;
+  background-color: #68818b;
+  color: white;
+  font-family: "Gowun Batang", serif;
+  font-size: 2em;
+  line-height: 200%;
+  text-align: right;
+  padding: 0;
+  margin: 0;
+  position: absolute;
+  top: 0;
+  left: 0;
+  transition: all 1s 
+}
+#box-right {
+  width: calc(100% - 300px);
+  height: 100%;
+  float: right;
+  flex: 1;
+  padding: 0;
+  margin: 0;
+  position: absolute;
+  top: 0;
+  right: 0;
+  transition: all 1s;
+}
+#box-left > h1 {
+  width: calc(100% - 40px);
+  padding: 30px 0 0;
+  padding-right: 20px;
+  float: right;
+}
+#options {
+  width: calc(100% - 40px);
+  padding: 0;
+  padding-right: 20px;
+  float: right;
+}
+#options > div {
+  height: 40px;
+  display: inline-block;
+}
+#sourceText {
+  width: calc(100% - 5px);
+  height: calc(100% - 5px);
+  border: none;
+  overflow: auto;
+  font-family: "Gowun Batang", serif;
+  font-size: 2em;
+  resize: none;
+}
+/* #options > div:not(:last-child) {
+  padding: 0;
+  background-color: red;
+}
+#description > div:last-child {
+  padding: 0;
+} */
+
+
+/******************* Switches *******************/
+.checkbox-wrapper .switch {
+  /* Variables */
+  --switch_width: 2em;
+  --switch_height: 1em;
+  --thumb_color: #e8e8e8;
+  --track_color: #68818b;
+  --track_active_color: #009A00;
+  --outline_color: #422800;
+  font-size: 17px;
+  position: relative;
+  display: inline-block;
+  width: var(--switch_width);
+  height: var(--switch_height);
+}
+
+/* The slider */
+.checkbox-wrapper .slider {
+  box-sizing: border-box;
+  border: 2px solid var(--outline_color);
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--track_color);
+  transition: 0.15s;
+  border-radius: var(--switch_height);
+}
+
+.checkbox-wrapper .slider:before {
+  box-sizing: border-box;
+  position: absolute;
+  content: "";
+  height: var(--switch_height);
+  width: var(--switch_height);
+  border: 2px solid var(--outline_color);
+  border-radius: 100%;
+  left: -2px;
+  bottom: -2px;
+  background-color: var(--thumb_color);
+  transform: translateY(-0.2em);
+  box-shadow: 0 0.2em 0 var(--outline_color);
+  transition: 0.15s;
+}
+
+.checkbox-wrapper input:checked + .slider {
+  background-color: var(--track_active_color);
+}
+
+.checkbox-wrapper input:focus-visible + .slider {
+  box-shadow: 0 0 0 2px var(--track_active_color);
+}
+
+/* Raise thumb when hovered */
+.checkbox-wrapper input:hover + .slider:before {
+  transform: translateY(-0.3em);
+  box-shadow: 0 0.3em 0 var(--outline_color);
+}
+
+.checkbox-wrapper input:checked + .slider:before {
+  transform: translateX(calc(var(--switch_width) - var(--switch_height)))
+    translateY(-0.2em);
+}
+
+/* Raise thumb when hovered & checked */
+.checkbox-wrapper input:hover:checked + .slider:before {
+  transform: translateX(calc(var(--switch_width) - var(--switch_height)))
+    translateY(-0.3em);
+  box-shadow: 0 0.3em 0 var(--outline_color);
+}
+
+/******************* Buttons *******************/
+.button-74 {
+  font-family: "Gowun Batang", serif;
+  background-color: #68818b;
+  border: 2px solid #422800;
+  border-radius: 30px;
+  box-shadow: #422800 4px 4px 0 0;
+  color: #fff;
+  cursor: pointer;
+  display: inline-block;
+  font-weight: 700;
+  font-size: 18px;
+  padding: 0 18px;
+  line-height: 50px;
+  text-align: center;
+  text-decoration: none;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+.button-74:hover {
+  background-color: #68818b;
+}
+.button-74:active {
+  box-shadow: #422800 2px 2px 0 0;
+  transform: translate(2px, 2px);
+}
+@media (min-width: 768px) {
+  .button-74 {
+    min-width: 120px;
+    padding: 0 25px;
+  }
+}
+.checkbox-wrapper input[type="checkbox"] {
+  visibility: hidden;
+  display: none;
+}
+
+.checkbox-wrapper *,
+.checkbox-wrapper ::after,
+.checkbox-wrapper ::before {
+  box-sizing: border-box;
+}
+
+/* Foldded display*/
+.hidden #options,
+.hidden h1 {
+  display: none;
+}
+
+#box-left.hidden {
+  width: 50px;
+  transition: all 1s 
+}
+
+.hidden #copyButton {
+  display: inline-block;
+}
+
+#control {
+  position: absolute;
+  top: 0;
+  left: 260px;
+  /* background-color: red; */
+  /* border: 1px white solid; */
+  transition: all 1s;
+}
+#control.collapsed {
+  left: 18px;
+  transition: all 1s;
+}
+
+#control button {
+  font-family: "Gowun Batang", serif;
+  background-color: #68818b;
+  border: none;
+  box-shadow: none;
+  /* border-top: 2px solid #422800;
+  border-left: 0;
+  border-right: 2px solid #422800;
+  border-bottom: 2px solid #422800; */
+  /* box-shadow: #422800 4px 4px 0 0; */
+  color: #fff;
+  cursor: pointer;
+  display: inline-block;
+  font-weight: 700;
+  font-size: 25px;
+  min-width: 30px;
+  padding: 0;
+  line-height: 50px;
+  text-align: center;
+  text-decoration: none;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+
+#box-right.expanded {
+  width: calc(100% - 50px);
+  transition: all 1s;
+}
+
+#version {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.4em;
+  color: #ddd;
+  width: 100%;
+  line-height: 100%;
+  position: absolute;
+  top: calc(100% - 1.5em);
+  right: 15px;
+}
+</style>
+</html>
